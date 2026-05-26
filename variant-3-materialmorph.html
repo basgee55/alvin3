@@ -1,0 +1,1529 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Paddock · MaterialMorph</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,800&display=swap" rel="stylesheet" />
+<style>
+/* ───────────────────────────────────────────────
+   PADDOCK · MATERIALMORPH ENGINE
+   Elk blok heeft een eigen 'material-DNA' via
+   data-material. Eén CSS engine. Geen libraries.
+   Materialen reageren op hover, focus, scroll.
+   Achtergrond is een ademend Perlin-achtig noise-veld.
+   ─────────────────────────────────────────────── */
+
+:root {
+  --ink:        #1a1a1f;
+  --ink-mute:   #6b6b75;
+  --ink-faint:  #b0b0b8;
+  --paper:      #f5f1ea;
+  --paper-deep: #ebe5d8;
+  --bg:         #f2efea;
+  --ease:       cubic-bezier(.16, 1, .3, 1);
+  --spring:     cubic-bezier(.34, 1.56, .64, 1);
+
+  /* Material palette */
+  --crack-bg:   #131218;
+  --crack-line: rgba(255, 255, 255, 0.55);
+
+  --metal-1:    #c8d0d9;
+  --metal-2:    #f0f3f7;
+  --metal-3:    #6a7280;
+  --metal-4:    #1d1f23;
+
+  --scorch-1:   #f3e6cf;
+  --scorch-2:   #d8a363;
+  --scorch-3:   #5a3411;
+  --scorch-4:   #1a0a02;
+
+  --holo-1:     #ff80b5;
+  --holo-2:     #8090ff;
+  --holo-3:     #80ffd6;
+  --holo-4:     #ffdc80;
+
+  --circuit-bg: #0c0e12;
+  --circuit-g:  #50ffd0;
+  --circuit-m:  #ff5cc6;
+
+  --role-red:    #ff5a3c;
+  --role-green:  #4ed68a;
+  --role-orange: #ffa634;
+  --role-blue:   #5ab0ff;
+  --role-purple: #be8fff;
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body {
+  margin: 0; padding: 0;
+  font-family: 'Space Grotesk', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+body { overflow-x: hidden; position: relative; }
+
+/* ── Noise canvas (living surface) ────────────── */
+#noiseCanvas {
+  position: fixed; inset: 0; z-index: 0;
+  width: 100%; height: 100%;
+  opacity: 0.85;
+  pointer-events: none;
+  mix-blend-mode: multiply;
+}
+.bg-tint {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 100% 60% at 30% 0%,  rgba(255,200,160,0.25), transparent 60%),
+    radial-gradient(ellipse 80% 60% at 80% 100%, rgba(160,200,255,0.20), transparent 60%);
+}
+
+/* ── App container ────────────────────────────── */
+.app {
+  position: relative; z-index: 1;
+  max-width: 430px; margin: 0 auto;
+  min-height: 100dvh;
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ── Top nav (holographic) ────────────────────── */
+.topnav {
+  position: sticky; top: 0; z-index: 30;
+  padding-top: env(safe-area-inset-top);
+  background: rgba(242, 239, 234, 0.7);
+  backdrop-filter: blur(20px) saturate(140%);
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.topnav-head {
+  display: flex; align-items: baseline; gap: 8px;
+  padding: 14px 18px 6px;
+}
+.brand {
+  font-family: 'Fraunces', serif;
+  font-weight: 800; font-size: 22px;
+  letter-spacing: -0.02em;
+  background: linear-gradient(95deg, var(--holo-1), var(--holo-2), var(--holo-3), var(--holo-4), var(--holo-1));
+  background-size: 300% 100%;
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: holo-shift 8s linear infinite;
+}
+@keyframes holo-shift { from { background-position: 0% 50%; } to { background-position: 300% 50%; } }
+.brand-sub {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: 0.18em;
+  color: var(--ink-mute); text-transform: uppercase;
+}
+.live {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: 'Space Mono', monospace; font-size: 10px;
+  color: var(--ink-mute); letter-spacing: 0.1em;
+}
+.live::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--role-green);
+  box-shadow: 0 0 8px var(--role-green);
+  animation: pulse 1.6s ease-in-out infinite;
+}
+@keyframes pulse { 50% { opacity: 0.4; } }
+
+.race-rail {
+  display: flex; gap: 8px; padding: 4px 18px 12px;
+  overflow-x: auto; scrollbar-width: none;
+}
+.race-rail::-webkit-scrollbar { display: none; }
+.race-chip {
+  flex: 0 0 auto;
+  padding: 7px 11px; border-radius: 10px;
+  background: rgba(255,255,255,0.5);
+  border: 1px solid rgba(0,0,0,0.08);
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; letter-spacing: 0.05em;
+  color: var(--ink);
+  cursor: pointer;
+}
+.race-chip.away { opacity: 0.4; }
+.race-chip.onsite { border-color: rgba(0,0,0,0.25); }
+.race-chip.current {
+  background: linear-gradient(95deg, var(--holo-1), var(--holo-2), var(--holo-3), var(--holo-4));
+  background-size: 300% 100%;
+  border-color: transparent; color: var(--ink);
+  animation: holo-shift 6s linear infinite;
+  font-weight: 700;
+}
+
+/* ── Section tabs ─────────────────────────────── */
+.tabs {
+  display: flex; padding: 0 14px;
+  background: rgba(242,239,234, 0.9);
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+  position: sticky; top: 0; z-index: 25;
+  backdrop-filter: blur(12px);
+}
+.tab {
+  flex: 1; padding: 12px 4px;
+  background: transparent; border: 0; cursor: pointer;
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  color: var(--ink-mute); position: relative;
+  letter-spacing: -0.01em;
+}
+.tab.active { color: var(--ink); }
+.tab::after {
+  content: ''; position: absolute; bottom: -1px; left: 25%; right: 25%;
+  height: 2px;
+  background: linear-gradient(95deg, var(--holo-1), var(--holo-2), var(--holo-3));
+  background-size: 200% 100%;
+  animation: holo-shift 4s linear infinite;
+  border-radius: 1px;
+  opacity: 0; transform: scaleX(0.4);
+  transition: opacity .25s var(--ease), transform .25s var(--ease);
+}
+.tab.active::after { opacity: 1; transform: scaleX(1); }
+
+/* ── Content ──────────────────────────────────── */
+.content {
+  padding: 16px 14px 40px;
+  display: grid; gap: 14px;
+}
+
+/* ── Block scaffold ──────────────────────────── */
+.block {
+  position: relative;
+  padding: 18px 20px;
+  border-radius: 22px;
+  overflow: hidden;
+  /* visible by default; opt-in entry animation respects reduced-motion */
+}
+@media (prefers-reduced-motion: no-preference) {
+  .block { opacity: 0; transform: translateY(14px); animation: enter .7s var(--spring) forwards; }
+}
+.content > .block:nth-child(1) { animation-delay: 0.04s; }
+.content > .block:nth-child(2) { animation-delay: 0.10s; }
+.content > .block:nth-child(3) { animation-delay: 0.16s; }
+.content > .block:nth-child(4) { animation-delay: 0.22s; }
+.content > .block:nth-child(5) { animation-delay: 0.28s; }
+.content > .block:nth-child(6) { animation-delay: 0.34s; }
+@keyframes enter { to { opacity: 1; transform: translateY(0); } }
+
+.block-head {
+  display: flex; align-items: center; gap: 10px;
+  margin-bottom: 14px; position: relative; z-index: 2;
+}
+.block-label {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.18em; text-transform: uppercase;
+}
+.block-action {
+  margin-left: auto;
+  font-family: 'Space Mono', monospace; font-size: 10px;
+  letter-spacing: 0.1em; text-transform: lowercase;
+  background: transparent; border: 0; cursor: pointer;
+  padding: 4px 0;
+}
+.block-body { position: relative; z-index: 2; }
+
+/* ═══════════════════════════════════════════════
+   MATERIAL: LIQUID METAL — race weekend, weather
+   ═══════════════════════════════════════════════ */
+[data-material="liquid-metal"] {
+  background:
+    radial-gradient(ellipse 80% 60% at 30% 20%, var(--metal-2), transparent 70%),
+    radial-gradient(ellipse 70% 50% at 80% 90%, #a8b8c8, transparent 70%),
+    linear-gradient(135deg, var(--metal-1) 0%, var(--metal-3) 100%);
+  border-radius: 38% 42% 40% 40% / 42% 40% 42% 40%;
+  padding: 38px 40px 32px;
+  animation: metal-breathe 12s ease-in-out infinite;
+  color: var(--metal-4);
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,0.6),
+    inset 0 -2px 4px rgba(0,0,0,0.15),
+    0 12px 30px rgba(30,40,60,0.18);
+  transition: transform .4s var(--ease);
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-material="liquid-metal"] {
+    animation: enter .7s var(--spring) forwards, metal-breathe 12s ease-in-out infinite;
+  }
+}
+[data-material="liquid-metal"]::before {
+  content: ''; position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 20% 30%, rgba(255,255,255,0.5), transparent 30%),
+    radial-gradient(circle at 70% 70%, rgba(0,0,0,0.18), transparent 35%);
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  border-radius: inherit;
+}
+[data-material="liquid-metal"]::after {
+  content: ''; position: absolute; inset: 0;
+  background:
+    repeating-linear-gradient(115deg, transparent 0 18px, rgba(255,255,255,0.04) 18px 19px);
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  border-radius: inherit;
+}
+[data-material="liquid-metal"]:hover { transform: scale(1.01); }
+[data-material="liquid-metal"] .block-label { color: var(--metal-4); }
+[data-material="liquid-metal"] .block-action { color: var(--metal-4); }
+@keyframes metal-breathe {
+  0%, 100% { border-radius: 38% 42% 40% 40% / 42% 40% 42% 40%; }
+  25% { border-radius: 42% 38% 42% 40% / 40% 42% 40% 42%; }
+  50% { border-radius: 40% 42% 38% 42% / 42% 40% 42% 40%; }
+  75% { border-radius: 42% 40% 42% 38% / 40% 42% 40% 42%; }
+}
+
+/* ═══════════════════════════════════════════════
+   MATERIAL: HOLOGRAPHIC FOIL — crew (identity)
+   ═══════════════════════════════════════════════ */
+[data-material="holographic"] {
+  background:
+    linear-gradient(95deg,
+      var(--holo-1) 0%, var(--holo-2) 30%,
+      var(--holo-3) 55%, var(--holo-4) 80%,
+      var(--holo-1) 100%);
+  background-size: 300% 100%;
+  animation: holo-shift 10s linear infinite;
+  color: #1a1a2e;
+  box-shadow:
+    inset 0 2px 0 rgba(255,255,255,0.7),
+    0 10px 30px rgba(120,100,200,0.18);
+  border-radius: 22px;
+}
+@media (prefers-reduced-motion: no-preference) {
+  [data-material="holographic"] {
+    animation: enter .7s var(--spring) forwards, holo-shift 10s linear infinite;
+  }
+}
+[data-material="holographic"]::before {
+  content: ''; position: absolute; inset: 0;
+  background:
+    linear-gradient(115deg, transparent 35%, rgba(255,255,255,0.65) 50%, transparent 65%);
+  background-size: 300% 100%;
+  animation: shimmer 5s linear infinite;
+  mix-blend-mode: overlay;
+  pointer-events: none;
+  border-radius: inherit;
+}
+[data-material="holographic"]::after {
+  content: ''; position: absolute; inset: 0;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255,255,255,0.4), transparent 30%),
+    radial-gradient(circle at 70% 80%, rgba(0,0,0,0.06), transparent 40%);
+  mix-blend-mode: soft-light;
+  pointer-events: none;
+  border-radius: inherit;
+}
+@keyframes shimmer { from { background-position: -100% 0; } to { background-position: 200% 0; } }
+[data-material="holographic"]:hover { animation-duration: 5s; }
+[data-material="holographic"] .block-label,
+[data-material="holographic"] .block-action { color: #1a1a2e; }
+
+/* ═══════════════════════════════════════════════
+   MATERIAL: CRACKED GLASS — flights (alert/dispatch)
+   ═══════════════════════════════════════════════ */
+[data-material="cracked-glass"] {
+  background:
+    linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0)),
+    var(--crack-bg);
+  color: #f0f0f5;
+  border-radius: 18px;
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,0.1),
+    0 14px 36px rgba(0,0,0,0.45);
+  transition: transform .35s var(--ease);
+}
+[data-material="cracked-glass"]::before {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 400 300' preserveAspectRatio='none'><g stroke='white' stroke-width='0.5' fill='none' stroke-linecap='round' opacity='0.85'><path d='M 80 -10 L 120 70 L 180 110 L 240 95 L 300 140 L 360 220 L 410 260'/><path d='M 120 70 L 70 150 L 90 220 L 130 290'/><path d='M 180 110 L 200 170 L 170 240'/><path d='M 240 95 L 280 150 L 270 220 L 320 290'/><path d='M 300 140 L 360 110'/><path d='M -10 200 L 70 150 L 200 170 L 270 220 L 410 200'/><path d='M 90 220 L 170 240 L 270 220 L 320 290'/></g><g stroke='white' stroke-width='0.25' fill='none' opacity='0.5'><path d='M 50 0 L 80 60'/><path d='M 150 0 L 180 50'/><path d='M 250 0 L 280 70'/><path d='M 350 30 L 380 80'/><path d='M 0 100 L 50 130'/><path d='M 390 130 L 410 170'/><path d='M 30 300 L 70 270'/><path d='M 200 300 L 230 270'/><path d='M 380 300 L 360 270'/></g></svg>");
+  background-size: 100% 100%;
+  background-position: center;
+  filter: drop-shadow(0 0 2px rgba(255,255,255,0.4));
+  opacity: 0.8;
+  animation: crack-pulse 3.5s ease-in-out infinite;
+  border-radius: inherit;
+}
+[data-material="cracked-glass"]::after {
+  content: '';
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(circle at 30% 20%, rgba(255,90,140,0.15), transparent 30%),
+    radial-gradient(circle at 70% 70%, rgba(90,160,255,0.18), transparent 40%);
+  mix-blend-mode: screen;
+  border-radius: inherit;
+}
+@keyframes crack-pulse {
+  0%, 100% { opacity: 0.7; filter: drop-shadow(0 0 2px rgba(255,255,255,0.3)); }
+  50%      { opacity: 0.95; filter: drop-shadow(0 0 4px rgba(255,255,255,0.65)); }
+}
+[data-material="cracked-glass"]:hover {
+  transform: translateY(-1px);
+}
+[data-material="cracked-glass"]:hover::before {
+  animation-duration: 1.8s;
+}
+[data-material="cracked-glass"] .block-label { color: rgba(255,255,255,0.6); }
+[data-material="cracked-glass"] .block-action { color: #5ab0ff; }
+
+/* ═══════════════════════════════════════════════
+   MATERIAL: SCORCHED PAPER — hotel (place)
+   ═══════════════════════════════════════════════ */
+[data-material="scorched-paper"] {
+  background:
+    radial-gradient(circle at 10% 10%, var(--scorch-3) 0%, transparent 12%),
+    radial-gradient(circle at 92% 8%, var(--scorch-4) 0%, transparent 8%),
+    radial-gradient(circle at 5% 90%, var(--scorch-3) 0%, transparent 14%),
+    radial-gradient(circle at 95% 95%, var(--scorch-4) 0%, transparent 10%),
+    radial-gradient(circle at 50% 50%, var(--scorch-1) 0%, var(--scorch-1) 40%, var(--scorch-2) 80%, var(--scorch-3) 100%);
+  color: var(--scorch-4);
+  border-radius: 24px 18px 26px 16px;
+  box-shadow:
+    inset 0 0 24px rgba(90,52,17,0.15),
+    inset 0 0 80px rgba(26,10,2,0.18),
+    0 12px 30px rgba(60,30,10,0.25);
+}
+[data-material="scorched-paper"]::before {
+  /* Paper fibres */
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='2'/%3E%3CfeColorMatrix values='0 0 0 0 0.4 0 0 0 0 0.25 0 0 0 0 0.1 0 0 0 0.3 0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.35;
+  mix-blend-mode: multiply;
+  border-radius: inherit;
+}
+[data-material="scorched-paper"]::after {
+  /* Scorched edges (irregular dark vignette) */
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 95% 92% at 50% 50%,
+      transparent 60%,
+      rgba(90,52,17,0.5) 80%,
+      rgba(26,10,2,0.95) 100%);
+  border-radius: inherit;
+  mix-blend-mode: multiply;
+}
+[data-material="scorched-paper"] .block-label { color: var(--scorch-3); }
+[data-material="scorched-paper"] .block-action { color: var(--scorch-3); }
+
+/* ═══════════════════════════════════════════════
+   MATERIAL: NEON CIRCUIT — schedule/data grids
+   ═══════════════════════════════════════════════ */
+[data-material="neon-circuit"] {
+  background:
+    linear-gradient(180deg, #161a22 0%, var(--circuit-bg) 100%);
+  color: #d8e3ed;
+  border-radius: 16px;
+  box-shadow:
+    inset 0 1px 0 rgba(80,255,208,0.15),
+    0 14px 30px rgba(0,30,40,0.35);
+}
+[data-material="neon-circuit"]::before {
+  /* circuit grid lines */
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    linear-gradient(90deg, rgba(80,255,208,0.10) 1px, transparent 1px),
+    linear-gradient(0deg,  rgba(80,255,208,0.10) 1px, transparent 1px);
+  background-size: 24px 24px;
+  mask-image: radial-gradient(ellipse 90% 60% at 50% 50%, black 30%, transparent 80%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 60% at 50% 50%, black 30%, transparent 80%);
+  border-radius: inherit;
+}
+[data-material="neon-circuit"]::after {
+  /* glow nodes */
+  content: ''; position: absolute; inset: 0; pointer-events: none;
+  background-image:
+    radial-gradient(circle 2px at 24px 48px, var(--circuit-g) 80%, transparent 100%),
+    radial-gradient(circle 2px at 72px 96px, var(--circuit-m) 80%, transparent 100%),
+    radial-gradient(circle 2px at 168px 72px, var(--circuit-g) 80%, transparent 100%),
+    radial-gradient(circle 2px at 264px 144px, var(--circuit-m) 80%, transparent 100%),
+    radial-gradient(circle 2px at 120px 192px, var(--circuit-g) 80%, transparent 100%),
+    radial-gradient(circle 2px at 312px 96px, var(--circuit-g) 80%, transparent 100%);
+  filter: drop-shadow(0 0 6px var(--circuit-g));
+  animation: circuit-pulse 2.5s ease-in-out infinite;
+  border-radius: inherit;
+}
+@keyframes circuit-pulse { 50% { opacity: 0.55; } }
+[data-material="neon-circuit"] .block-label { color: var(--circuit-g); }
+[data-material="neon-circuit"] .block-action { color: var(--circuit-m); }
+
+/* ═══════════════════════════════════════════════
+   PLAIN (fallback) for action/utility surfaces
+   ═══════════════════════════════════════════════ */
+[data-material="plain"] {
+  background: rgba(255,255,255,0.75);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 18px;
+  box-shadow: 0 8px 18px rgba(0,0,0,0.06);
+}
+[data-material="plain"] .block-label { color: var(--ink-mute); }
+[data-material="plain"] .block-action { color: var(--ink); }
+
+/* ═══════════════════════════════════════════════
+   Per-material content styling
+   ═══════════════════════════════════════════════ */
+
+/* RACE (liquid-metal) */
+.race-name {
+  font-family: 'Fraunces', serif;
+  font-weight: 800; font-size: 44px;
+  letter-spacing: -0.025em; line-height: 0.95;
+}
+.race-sub {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; letter-spacing: 0.06em;
+  text-transform: uppercase; margin-top: 8px; opacity: 0.85;
+}
+.next-strip {
+  margin-top: 16px;
+  background: rgba(255,255,255,0.4);
+  border: 1px solid rgba(0,0,0,0.08);
+  backdrop-filter: blur(8px);
+  border-radius: 14px;
+  padding: 12px 14px;
+  display: flex; align-items: center; gap: 12px;
+}
+.next-strip .ind {
+  width: 3px; height: 28px; background: var(--metal-4); border-radius: 2px;
+}
+.next-strip .lbl {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: 0.12em; text-transform: uppercase;
+  opacity: 0.7;
+}
+.next-strip .nm { font-size: 14px; font-weight: 600; margin-top: 2px; }
+.next-strip .when {
+  font-family: 'Space Mono', monospace; font-size: 14px; font-weight: 700;
+  text-align: right;
+}
+.next-strip .when small { display: block; font-weight: 400; opacity: 0.7; font-size: 10px; margin-top: 2px; }
+
+/* CREW (holographic) */
+.crew-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.crew-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 7px 12px;
+  background: rgba(255,255,255,0.55);
+  border: 1px solid rgba(0,0,0,0.1);
+  border-radius: 99px;
+  font-size: 13px; font-weight: 500;
+  color: #1a1a2e; cursor: pointer;
+  transition: all .2s var(--ease);
+}
+.crew-pill:hover { background: rgba(255,255,255,0.85); transform: translateY(-1px); }
+.crew-pill .dot { width: 7px; height: 7px; border-radius: 50%; }
+.dot.red    { background: var(--role-red); }
+.dot.green  { background: var(--role-green); }
+.dot.orange { background: var(--role-orange); }
+.dot.blue   { background: var(--role-blue); }
+.dot.purple { background: var(--role-purple); }
+
+/* WEATHER (liquid-metal compact) */
+.wx-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 8px; }
+.wx-cell {
+  background: rgba(255,255,255,0.35);
+  border: 1px solid rgba(0,0,0,0.06);
+  backdrop-filter: blur(6px);
+  border-radius: 14px;
+  padding: 12px 4px;
+  text-align: center;
+}
+.wx-day {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  font-weight: 700; opacity: 0.7;
+}
+.wx-icon { margin: 8px auto 4px; height: 24px; display: flex; justify-content: center; }
+.wx-temp {
+  font-family: 'Fraunces', serif;
+  font-weight: 700; font-size: 22px;
+  letter-spacing: -0.02em;
+  font-feature-settings: 'tnum';
+}
+.wx-rain {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; opacity: 0.65; margin-top: 1px;
+}
+
+/* FLIGHTS (cracked-glass) */
+.flight-row { padding: 12px 0; }
+.flight-row + .flight-row {
+  border-top: 1px solid rgba(255,255,255,0.15);
+}
+.flight-line { display: flex; align-items: center; gap: 12px; }
+.flight-line .port {
+  font-family: 'Fraunces', serif;
+  font-weight: 800; font-size: 28px;
+  letter-spacing: -0.02em; line-height: 1;
+  color: #f5f5fa;
+}
+.flight-line .mid { flex: 1; padding: 0 8px; text-align: center; }
+.flight-line .mid .row1 {
+  display: flex; align-items: center; gap: 6px;
+}
+.flight-line .mid .line {
+  flex: 1; height: 1px; background: rgba(255,255,255,0.3);
+}
+.flight-line .mid svg { color: rgba(255,255,255,0.7); }
+.flight-line .mid .meta {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; letter-spacing: 0.08em;
+  color: rgba(255,255,255,0.55); margin-top: 4px;
+}
+.flight-times {
+  display: flex; gap: 16px; margin-top: 8px;
+  font-family: 'Space Mono', monospace; font-size: 11px;
+  color: rgba(255,255,255,0.75); letter-spacing: 0.04em;
+}
+.flight-times .dir {
+  color: #5ab0ff; font-weight: 700;
+}
+.flight-times > span:nth-child(2) { flex: 1; }
+
+/* HOTEL (scorched-paper) */
+.hotel-name {
+  font-family: 'Fraunces', serif;
+  font-weight: 600; font-size: 22px; letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+.hotel-addr {
+  font-family: 'Space Mono', monospace;
+  font-size: 11px; opacity: 0.75; margin-top: 6px;
+  letter-spacing: 0.04em;
+}
+.hotel-actions { display: flex; gap: 8px; margin-top: 14px; }
+.btn-scorch {
+  flex: 1; padding: 10px 14px;
+  background: rgba(247, 228, 195, 0.6);
+  border: 1px solid rgba(90,52,17,0.4);
+  border-radius: 12px;
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--scorch-4);
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  transition: all .2s var(--ease);
+}
+.btn-scorch:hover {
+  background: rgba(247, 228, 195, 0.9);
+  border-color: var(--scorch-3);
+}
+
+/* WEEK (neon-circuit) */
+.week-row {
+  display: grid; grid-template-columns: 46px 1fr auto;
+  align-items: center; gap: 14px;
+  padding: 10px 0;
+}
+.week-row + .week-row {
+  border-top: 1px solid rgba(80,255,208,0.15);
+}
+.week-day {
+  font-family: 'Space Mono', monospace; font-size: 13px; font-weight: 700;
+  letter-spacing: 0.04em; color: var(--circuit-g);
+}
+.week-day small {
+  display: block; font-weight: 400; font-size: 10px;
+  color: rgba(216,227,237,0.5); margin-top: 2px;
+}
+.week-bar { display: flex; align-items: center; gap: 8px; }
+.week-bar .t {
+  font-family: 'Space Mono', monospace;
+  font-size: 12px; color: #d8e3ed;
+}
+.week-bar .track {
+  flex: 1; height: 2px; border-radius: 1px;
+  background: linear-gradient(90deg, var(--circuit-g), var(--circuit-m));
+  box-shadow: 0 0 6px var(--circuit-g);
+}
+.week-set {
+  font-family: 'Space Mono', monospace;
+  font-size: 10px; color: var(--circuit-m);
+  padding: 3px 7px; border: 1px solid var(--circuit-m);
+  border-radius: 6px;
+  letter-spacing: 0.05em; text-transform: uppercase;
+}
+
+/* ── Schema tab ──────────────────────────────── */
+.sub-tabs {
+  display: flex; gap: 4px; padding: 4px;
+  background: rgba(255,255,255,0.5);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 12px;
+  margin-bottom: 14px;
+}
+.sub-tabs button {
+  flex: 1; padding: 9px 8px; border: 0; cursor: pointer;
+  background: transparent;
+  font-family: 'Space Mono', monospace; font-size: 11px;
+  letter-spacing: 0.15em; text-transform: uppercase; font-weight: 700;
+  border-radius: 8px;
+  color: var(--ink-mute);
+}
+.sub-tabs button.active {
+  background: var(--ink); color: white;
+}
+.day-card {
+  background: rgba(255,255,255,0.7);
+  border: 1px solid rgba(0,0,0,0.06);
+  backdrop-filter: blur(8px);
+  border-radius: 18px;
+  overflow: hidden;
+}
+.day-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 18px;
+  background: transparent; border: 0; cursor: pointer;
+  width: 100%; text-align: left; font-family: inherit;
+}
+.day-head .d {
+  font-family: 'Space Mono', monospace; font-size: 10px;
+  letter-spacing: 0.18em; color: var(--ink-mute); text-transform: uppercase;
+}
+.day-head .nm {
+  flex: 1; font-family: 'Fraunces', serif;
+  font-weight: 600; font-size: 18px; letter-spacing: -0.01em;
+}
+.day-head .ct {
+  font-family: 'Space Mono', monospace; font-size: 11px; color: var(--ink-faint);
+}
+.day-head .chev { color: var(--ink-mute); transition: transform .25s var(--ease); }
+.day-card.open .chev { transform: rotate(180deg); }
+.day-body { display: none; padding: 0 8px 10px; }
+.day-card.open .day-body { display: block; }
+.session {
+  display: flex; align-items: center; gap: 10px;
+  padding: 9px 12px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.55);
+  border: 1px solid rgba(0,0,0,0.04);
+  margin-top: 4px;
+}
+.session.is-race {
+  background: linear-gradient(95deg, rgba(255,128,180,0.18), rgba(128,144,255,0.18), rgba(128,255,214,0.18));
+  background-size: 200% 100%; animation: holo-shift 6s linear infinite;
+  border-color: rgba(0,0,0,0.12);
+}
+.session .t {
+  font-family: 'Space Mono', monospace; font-size: 11px;
+  color: var(--ink-mute); width: 88px; flex-shrink: 0;
+}
+.session .mk { width: 4px; height: 20px; border-radius: 2px; }
+.session[data-cls="m3"]    .mk { background: var(--role-purple); }
+.session[data-cls="m2"]    .mk { background: var(--role-blue); }
+.session[data-cls="mgp"]   .mk { background: var(--role-orange); }
+.session[data-cls="race"]  .mk { background: var(--role-red); }
+.session[data-cls="set"]   .mk { background: var(--role-green); }
+.session[data-cls="press"] .mk,
+.session[data-cls="track"] .mk { background: var(--ink-faint); }
+.session .lbl { flex: 1; font-size: 13px; font-weight: 500; }
+.session.is-race .lbl { font-weight: 700; }
+
+/* ── Crew tab ─────────────────────────────────── */
+.crew-row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 14px;
+  background: rgba(255,255,255,0.75);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 14px;
+  cursor: pointer;
+  transition: all .2s var(--ease);
+}
+.crew-row + .crew-row { margin-top: 6px; }
+.crew-row:hover { background: rgba(255,255,255,0.95); transform: translateX(2px); }
+.avatar {
+  width: 42px; height: 42px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  color: white; font-weight: 700; font-size: 14px;
+  font-family: 'Space Grotesk', sans-serif;
+  flex-shrink: 0;
+}
+.avatar.red    { background: linear-gradient(135deg, var(--role-red), #cc3a26); }
+.avatar.green  { background: linear-gradient(135deg, var(--role-green), #2ea866); }
+.avatar.orange { background: linear-gradient(135deg, var(--role-orange), #cc7e22); }
+.avatar.blue   { background: linear-gradient(135deg, var(--role-blue), #3c83cc); }
+.avatar.purple { background: linear-gradient(135deg, var(--role-purple), #8e60cc); }
+.crew-row .info { flex: 1; min-width: 0; }
+.crew-row .nm { font-family: 'Fraunces', serif; font-weight: 600; font-size: 17px; letter-spacing: -0.01em; }
+.crew-row .ro { display: flex; align-items: center; gap: 6px; font-size: 12px; color: var(--ink-mute); margin-top: 2px; font-family: 'Space Mono', monospace; letter-spacing: 0.04em; }
+.chev-r { color: var(--ink-faint); }
+
+/* ── Travel tab ──────────────────────────────── */
+.emergency-row {
+  display: flex; align-items: center; gap: 16px;
+  padding: 14px 16px;
+  background: rgba(255,255,255,0.65);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 14px;
+  margin-bottom: 6px;
+}
+.emergency-num {
+  font-family: 'Fraunces', serif;
+  font-weight: 800; font-size: 30px;
+  background: linear-gradient(135deg, var(--role-red), #cc3a26);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.02em; width: 56px;
+}
+
+/* ── Calendar tab ────────────────────────────── */
+.cal-card {
+  background: rgba(255,255,255,0.7);
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 18px;
+  overflow: hidden;
+  backdrop-filter: blur(8px);
+}
+.cal-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid rgba(0,0,0,0.05);
+  cursor: pointer;
+  transition: background .2s var(--ease);
+}
+.cal-row:first-child { border-top: 0; }
+.cal-row:hover { background: rgba(255,255,255,0.6); }
+.cal-row.done { opacity: 0.5; }
+.cal-row.current {
+  background:
+    linear-gradient(95deg, rgba(255,128,180,0.18), rgba(128,144,255,0.18), rgba(128,255,214,0.18));
+  background-size: 200% 100%;
+  animation: holo-shift 6s linear infinite;
+}
+.cal-row .rno {
+  font-family: 'Space Mono', monospace; font-weight: 700; font-size: 12px;
+  color: var(--ink-mute); width: 28px;
+}
+.cal-row.current .rno { color: var(--ink); }
+.cal-row .flag {
+  width: 30px; height: 30px; border-radius: 50%;
+  background: rgba(255,255,255,0.7);
+  border: 1px solid rgba(0,0,0,0.08);
+  display: flex; align-items: center; justify-content: center;
+  font-family: 'Space Mono', monospace; font-weight: 700; font-size: 10px;
+  flex-shrink: 0;
+}
+.cal-row .info { flex: 1; }
+.cal-row .info .co { font-family: 'Fraunces', serif; font-weight: 600; font-size: 16px; letter-spacing: -0.01em; }
+.cal-row .info .meta { font-family: 'Space Mono', monospace; font-size: 10px; color: var(--ink-mute); margin-top: 2px; letter-spacing: 0.04em; }
+.cal-row .badge {
+  font-family: 'Space Mono', monospace; font-size: 10px; letter-spacing: 0.1em;
+  padding: 4px 8px; border-radius: 6px; text-transform: uppercase;
+}
+.cal-row .badge.now {
+  background: linear-gradient(95deg, var(--holo-1), var(--holo-2), var(--holo-3));
+  background-size: 200% 100%; animation: holo-shift 5s linear infinite;
+  color: var(--ink); font-weight: 700;
+}
+.cal-row .badge.win { color: var(--role-green); border: 1px solid var(--role-green); }
+.cal-row .badge.os  { color: var(--ink-mute); border: 1px solid rgba(0,0,0,0.15); }
+
+/* ── Modal ────────────────────────────────────── */
+.modal-bg {
+  position: fixed; inset: 0; z-index: 100;
+  background: rgba(20,20,30,0.55);
+  backdrop-filter: blur(8px);
+  display: none; align-items: flex-end;
+  animation: fadeIn .25s var(--ease);
+}
+.modal-bg.show { display: flex; }
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.modal {
+  width: 100%; max-width: 430px; margin: 0 auto;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.96), rgba(255,255,255,0.98));
+  backdrop-filter: blur(20px);
+  border-top-left-radius: 28px; border-top-right-radius: 28px;
+  padding: 18px 22px calc(36px + env(safe-area-inset-bottom));
+  transform: translateY(20px);
+  animation: slideUp .35s var(--spring) forwards;
+  box-shadow: 0 -20px 50px rgba(0,0,0,0.2);
+  position: relative;
+}
+.modal::before {
+  content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px;
+  background: linear-gradient(95deg, var(--holo-1), var(--holo-2), var(--holo-3), var(--holo-4));
+  background-size: 200% 100%;
+  animation: holo-shift 5s linear infinite;
+  border-top-left-radius: 28px; border-top-right-radius: 28px;
+}
+@keyframes slideUp { to { transform: translateY(0); } }
+.modal .grabber {
+  width: 40px; height: 4px; border-radius: 2px;
+  background: rgba(0,0,0,0.12); margin: 8px auto 18px;
+}
+.modal-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.modal-head .nm { font-family: 'Fraunces', serif; font-weight: 700; font-size: 22px; letter-spacing: -0.01em; }
+.modal-head .ro { font-size: 13px; color: var(--ink-mute); margin-top: 2px; font-family: 'Space Mono', monospace; letter-spacing: 0.04em; }
+.modal .row {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 12px; border-radius: 14px;
+  background: rgba(0,0,0,0.03);
+  cursor: pointer; margin-bottom: 6px;
+}
+.modal .row:hover { background: rgba(0,0,0,0.06); }
+.modal .row .ic {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--holo-1), var(--holo-2));
+  color: white;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.modal .row .lbl { font-size: 11px; color: var(--ink-mute); text-transform: uppercase; letter-spacing: 0.12em; font-family: 'Space Mono', monospace; }
+.modal .row .vl  { font-family: 'Space Mono', monospace; font-size: 13px; margin-top: 2px; }
+
+.press { transition: transform .15s var(--spring); }
+.press:active { transform: scale(0.97); }
+</style>
+</head>
+<body>
+
+<canvas id="noiseCanvas" aria-hidden="true"></canvas>
+<div class="bg-tint" aria-hidden="true"></div>
+
+<div class="app">
+
+  <header class="topnav">
+    <div class="topnav-head">
+      <div class="brand">Paddock</div>
+      <div class="brand-sub">PIT.LIVE</div>
+      <div class="live"><span id="liveClock">19:48</span></div>
+    </div>
+    <div class="race-rail" id="raceRail"></div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="home">Home</button>
+    <button class="tab" data-tab="schema">Schema</button>
+    <button class="tab" data-tab="crew">Crew</button>
+    <button class="tab" data-tab="travel">Travel</button>
+    <button class="tab" data-tab="kal">Kal.</button>
+  </nav>
+
+  <main class="content" id="content"></main>
+</div>
+
+<div class="modal-bg" id="modal"></div>
+
+<script>
+/* ────────────── DATA ────────────── */
+const SEASON = [
+  { r:1, code:'THA', country:'Thailand',    circuit:'Buriram',        date:'28 feb – 1 mrt', onsite:true,  done:true,  winner:'M. Márquez' },
+  { r:2, code:'ARG', country:'Argentinië',  circuit:'Termas',         date:'14 – 15 mrt',     onsite:false, done:true,  winner:'F. Bagnaia' },
+  { r:3, code:'USA', country:'Amerika',     circuit:'Austin',         date:'28 – 29 mrt',     onsite:false, done:true,  winner:'M. Márquez' },
+  { r:4, code:'ESP', country:'Spanje',      circuit:'Jerez',          date:'25 – 26 apr',     onsite:true,  done:true,  winner:'F. Quartararo' },
+  { r:5, code:'FRA', country:'Frankrijk',   circuit:'Le Mans',        date:'9 – 10 mei',      onsite:false, done:true,  winner:'M. Márquez' },
+  { r:6, code:'CAT', country:'Catalonië',   circuit:'Barcelona',      date:'16 – 17 mei',     onsite:true,  done:true,  winner:'P. Acosta' },
+  { r:7, code:'ITA', country:'Italië',      circuit:'Mugello',        date:'30 – 31 mei',     onsite:true,  current:true },
+  { r:8, code:'NED', country:'Nederland',   circuit:'Assen',          date:'27 – 28 jun',     onsite:true  },
+  { r:9, code:'GER', country:'Duitsland',   circuit:'Sachsenring',    date:'11 – 12 jul',     onsite:false },
+  { r:10,code:'CZE', country:'Tsjechië',    circuit:'Brno',           date:'18 – 19 jul',     onsite:true  },
+  { r:11,code:'AUT', country:'Oostenrijk',  circuit:'Red Bull Ring',  date:'15 – 16 aug',     onsite:true  },
+  { r:12,code:'HUN', country:'Hongarije',   circuit:'Balaton Park',   date:'22 – 23 aug',     onsite:false },
+  { r:13,code:'GBR', country:'Groot-Britt.',circuit:'Silverstone',    date:'5 – 6 sep',       onsite:true  },
+  { r:14,code:'ARA', country:'Aragón',      circuit:'MotorLand',      date:'12 – 13 sep',     onsite:false },
+  { r:15,code:'JPN', country:'Japan',       circuit:'Motegi',         date:'26 – 27 sep',     onsite:false },
+  { r:16,code:'INA', country:'Indonesië',   circuit:'Mandalika',      date:'3 – 4 okt',       onsite:false },
+  { r:17,code:'AUS', country:'Australië',   circuit:'Phillip Island', date:'17 – 18 okt',     onsite:false },
+  { r:18,code:'MAL', country:'Maleisië',    circuit:'Sepang',         date:'24 – 25 okt',     onsite:false },
+  { r:19,code:'POR', country:'Portugal',    circuit:'Portimão',       date:'7 – 8 nov',       onsite:true  },
+  { r:20,code:'SMR', country:'San Marino',  circuit:'Misano',         date:'14 – 15 nov',     onsite:true  },
+  { r:21,code:'QAT', country:'Qatar',       circuit:'Lusail',         date:'21 – 22 nov',     onsite:true  },
+  { r:22,code:'VAL', country:'Valencia',    circuit:'Ricardo Tormo',  date:'28 – 29 nov',     onsite:true  },
+];
+const CURRENT = SEASON.find(r => r.current);
+const CREW = [
+  { id:'rob',    name:'Rob van Gameren',  role:'Presentator',    color:'orange', phone:'+31 6 1234 5678', email:'rob@example.tv',     ini:'RG' },
+  { id:'wilco',  name:'Wilco Zeelenberg', role:'Analist',        color:'orange', phone:'+31 6 2345 6789', email:'wilco@example.tv',   ini:'WZ' },
+  { id:'frank',  name:'Frank Weeink',     role:'Commentator',    color:'green',  phone:'+31 6 3456 7890', email:'frank@example.tv',   ini:'FW' },
+  { id:'barry',  name:'Barry Veneman',    role:'Co-commentator', color:'green',  phone:'+31 6 4567 8901', email:'barry@example.tv',   ini:'BV' },
+  { id:'alvin',  name:'Alvin van Wunnik', role:'Pitreporter',    color:'red',    phone:'+31 6 5678 9012', email:'alvin@example.tv',   ini:'AW' },
+  { id:'freek',  name:'Freek van Pelt',   role:'Regie',          color:'blue',   phone:'+31 6 6789 0123', email:'freek@example.tv',   ini:'FP' },
+  { id:'valerio',name:'Valerio Zeno',     role:'Gast',           color:'purple', phone:'+31 6 7890 1234', email:'valerio@example.tv', ini:'VZ' },
+];
+const WEATHER = [
+  { day:'Do', date:'28', icon:'sun',     tempH:27, rain:0  },
+  { day:'Vr', date:'29', icon:'partly',  tempH:26, rain:10 },
+  { day:'Za', date:'30', icon:'cloudy',  tempH:24, rain:30 },
+  { day:'Zo', date:'31', icon:'rain',    tempH:22, rain:70 },
+];
+const FLIGHTS = [
+  { dir:'out', no:'KL1655', day:'Wo 27 mei', dep:'17:15', arr:'19:30', from:'AMS', to:'FLR', term:'T2', plane:'E190' },
+  { dir:'in',  no:'KL1652', day:'Ma 1 jun',  dep:'11:45', arr:'14:00', from:'FLR', to:'AMS', term:'T1', plane:'E190' },
+];
+const HOTEL = { name:'The Social Hub Florence Belfiore', addr:'Viale Belfiore 55, Firenze', drive:'1u 5min naar circuit' };
+const SCHEDULE = [
+  { day:'Donderdag 28', items:[
+    { time:'14:00 – 15:00', label:'Persconferentie', cls:'press' },
+    { time:'17:00 – 18:00', label:'Track walk',      cls:'track' },
+  ]},
+  { day:'Vrijdag 29', items:[
+    { time:'08:40 – 09:20', label:'Moto3 Practice 1',   cls:'m3' },
+    { time:'09:35 – 10:15', label:'Moto2 Practice 1',   cls:'m2' },
+    { time:'10:45 – 11:30', label:'MotoGP Practice 1',  cls:'mgp' },
+    { time:'13:00 – 13:40', label:'Moto3 Practice 2',   cls:'m3' },
+    { time:'13:55 – 14:35', label:'Moto2 Practice 2',   cls:'m2' },
+    { time:'15:00 – 16:00', label:'MotoGP Practice 2',  cls:'mgp' },
+    { time:'16:30 – 16:50', label:'Uitzending einde',   cls:'set' },
+  ]},
+  { day:'Zaterdag 30', items:[
+    { time:'10:10 – 10:40', label:'MotoGP Practice 3',  cls:'mgp' },
+    { time:'10:50 – 11:30', label:'MotoGP Qualifying',  cls:'mgp' },
+    { time:'15:00 – 15:30', label:'Tissot Sprint',      cls:'race' },
+    { time:'16:00 – 16:20', label:'Uitzending einde',   cls:'set' },
+  ]},
+  { day:'Zondag 31', items:[
+    { time:'09:40 – 09:50', label:'Warm-up MotoGP',     cls:'mgp' },
+    { time:'11:00 – 11:25', label:'Moto3 Race',         cls:'race' },
+    { time:'12:15 – 12:55', label:'Moto2 Race',         cls:'m2' },
+    { time:'14:00 – 14:45', label:'MotoGP Grand Prix',  cls:'race' },
+    { time:'15:15 – 15:45', label:'Uitzending einde',   cls:'set' },
+  ]},
+];
+const WEEK = [
+  { day:'Do', date:28, start:'14:00', end:'18:00', set:'18:30' },
+  { day:'Vr', date:29, start:'08:40', end:'16:50', set:'16:50' },
+  { day:'Za', date:30, start:'08:40', end:'16:20', set:'16:20' },
+  { day:'Zo', date:31, start:'09:40', end:'15:45', set:'15:45' },
+];
+const NEXT_SESSION = { label:'MotoGP Practice 1', start:'Vr 10:45', in:'2d 14u' };
+const RENTAL = { provider:'Sunny Cars / Avis', ref:'09492159NL5', pickup:'Wo 27 mei 17:00', dropoff:'Ma 1 jun 11:00' };
+
+/* ────────────── ICONS ────────────── */
+const ICON = {
+  plane: '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M21 16v-2l-8-5V3.5C13 2.67 12.33 2 11.5 2S10 2.67 10 3.5V9l-8 5v2l8-2.5V19l-2 1.5V22l3.5-1 3.5 1v-1.5L13 19v-5.5z"/></svg>',
+  pin:   '<svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C8 2 5 5 5 9c0 5 7 13 7 13s7-8 7-13c0-4-3-7-7-7zm0 9.5a2.5 2.5 0 1 1 0-5 2.5 2.5 0 0 1 0 5z"/></svg>',
+  phone: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 15.5c-1.2 0-2.4-.2-3.6-.6a1 1 0 0 0-1.1.3l-2.2 2.2c-2.8-1.4-5.2-3.8-6.6-6.6l2.2-2.2a1 1 0 0 0 .3-1.1A11 11 0 0 1 8.5 4c0-.6-.4-1-1-1H4a1 1 0 0 0-1 1c0 9.4 7.6 17 17 17a1 1 0 0 0 1-1v-3.5c0-.5-.4-1-1-1z"/></svg>',
+  mail:  '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 4H4a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2zm0 4l-8 5-8-5V6l8 5 8-5z"/></svg>',
+  whats: '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 0 0-8.5 15.2L2 22l4.9-1.3A10 10 0 1 0 12 2z"/></svg>',
+  chev:  '<svg width="8" height="14" viewBox="0 0 8 14" fill="none"><path d="M1 1l6 6-6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+  down:  '<svg width="12" height="6" viewBox="0 0 12 6" fill="none"><path d="M1 1l5 4 5-4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+function wxIcon(kind) {
+  const c = 'currentColor';
+  if (kind === 'sun') return `<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4.5" fill="${c}"/>${[0,45,90,135,180,225,270,315].map(a=>{const r=a*Math.PI/180;return `<line x1="${12+Math.cos(r)*7.5}" y1="${12+Math.sin(r)*7.5}" x2="${12+Math.cos(r)*10}" y2="${12+Math.sin(r)*10}" stroke="${c}" stroke-width="1.7" stroke-linecap="round"/>`;}).join('')}</svg>`;
+  if (kind === 'partly') return `<svg width="24" height="24" viewBox="0 0 24 24"><circle cx="9" cy="9" r="3.5" fill="${c}"/><path d="M8 17 a4 4 0 1 1 0-8 a4 4 0 0 1 3.5 2 a3 3 0 0 1 4 4 a3 3 0 0 1 -3 2 z" fill="${c}" opacity=".55" transform="translate(2 1)"/></svg>`;
+  if (kind === 'cloudy') return `<svg width="24" height="24" viewBox="0 0 24 24"><path d="M6 17 a4 4 0 1 1 0-8 a4 4 0 0 1 3.5 2 a3 3 0 0 1 4 4 a3 3 0 0 1 -3 2 z" fill="${c}" opacity=".75" transform="translate(2 1)"/></svg>`;
+  if (kind === 'rain') return `<svg width="24" height="24" viewBox="0 0 24 24"><path d="M6 13 a4 4 0 1 1 0-8 a4 4 0 0 1 3.5 2 a3 3 0 0 1 4 4 a3 3 0 0 1 -3 2 z" fill="${c}" opacity=".75" transform="translate(2 1)"/><line x1="8" y1="17" x2="7" y2="20" stroke="${c}" stroke-width="1.5" stroke-linecap="round"/><line x1="12" y1="17" x2="11" y2="20" stroke="${c}" stroke-width="1.5" stroke-linecap="round"/><line x1="16" y1="17" x2="15" y2="20" stroke="${c}" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+  return '';
+}
+
+/* ────────────── NOISE CANVAS ──────────────
+   Value-noise (lightweight Perlin-achtige) gerenderd
+   op een kleine canvas. We schalen op via CSS en laten
+   de hele canvas langzaam pannen voor het 'levend
+   oppervlak'-gevoel.
+*/
+(function startNoise() {
+  const cv = document.getElementById('noiseCanvas');
+  const W = 96, H = 144;
+  cv.width = W; cv.height = H;
+  const ctx = cv.getContext('2d');
+  const img = ctx.createImageData(W, H);
+
+  // Hashed gradient noise (simple Perlin replacement)
+  const perm = new Uint8Array(512);
+  for (let i = 0; i < 256; i++) perm[i] = i;
+  for (let i = 255; i > 0; i--) {
+    const j = (Math.random() * (i + 1)) | 0;
+    [perm[i], perm[j]] = [perm[j], perm[i]];
+  }
+  for (let i = 0; i < 256; i++) perm[i + 256] = perm[i];
+  const fade = t => t * t * t * (t * (t * 6 - 15) + 10);
+  const lerp = (a, b, t) => a + t * (b - a);
+  const grad = (h, x, y) => {
+    const u = (h & 2) ? -y : y;
+    const v = (h & 1) ? -x : x;
+    return u + v;
+  };
+  function noise(x, y) {
+    const X = Math.floor(x) & 255;
+    const Y = Math.floor(y) & 255;
+    x -= Math.floor(x); y -= Math.floor(y);
+    const u = fade(x), v = fade(y);
+    const A  = perm[X] + Y;
+    const AA = perm[A], AB = perm[A + 1];
+    const B  = perm[X + 1] + Y;
+    const BA = perm[B], BB = perm[B + 1];
+    return lerp(
+      lerp(grad(perm[AA], x, y),       grad(perm[BA], x - 1, y),     u),
+      lerp(grad(perm[AB], x, y - 1),   grad(perm[BB], x - 1, y - 1), u),
+      v
+    );
+  }
+
+  let t = 0;
+  function render() {
+    t += 0.003;
+    const off = t;
+    const d = img.data;
+    let p = 0;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        // 2-octave noise + slow time component
+        let n = 0;
+        n += noise(x * 0.04 + off,        y * 0.04) * 0.65;
+        n += noise(x * 0.10 + off * 0.7,  y * 0.10) * 0.35;
+        const v = Math.max(0, Math.min(1, (n + 1) * 0.5));
+        // Map to a warm-cool drift around mid-tone
+        const r = 220 + (v - 0.5) * 30;
+        const g = 215 + (v - 0.5) * 22;
+        const b = 200 + (v - 0.5) * 38;
+        d[p++] = r; d[p++] = g; d[p++] = b; d[p++] = 200;
+      }
+    }
+    ctx.putImageData(img, 0, 0);
+    requestAnimationFrame(render);
+  }
+  render();
+})();
+
+/* ────────────── RENDER ────────────── */
+const $  = (q, el=document) => el.querySelector(q);
+const $$ = (q, el=document) => Array.from(el.querySelectorAll(q));
+
+let state = { tab:'home', schedSub:'weekend', travelSub:'vlucht', openDay: 1 };
+
+function renderRaceRail() {
+  const i = SEASON.indexOf(CURRENT);
+  const upcoming = SEASON.slice(Math.max(0,i-1), i+4);
+  $('#raceRail').innerHTML = upcoming.map(r => {
+    const cls = r.current ? 'current' : (r.onsite ? 'onsite' : 'away');
+    return `<div class="race-chip ${cls}">R${r.r} · ${r.code}</div>`;
+  }).join('');
+}
+
+function renderHome() {
+  return `
+    <article class="block" data-material="liquid-metal">
+      <div class="block-head">
+        <div class="block-label">// huidig weekend</div>
+        <button class="block-action" data-go="schema">→ schema</button>
+      </div>
+      <div class="block-body">
+        <div class="race-name">${CURRENT.country}</div>
+        <div class="race-sub">${CURRENT.circuit} · R${CURRENT.r}/22 · ${CURRENT.date}</div>
+        <div class="next-strip">
+          <div class="ind"></div>
+          <div style="flex:1">
+            <div class="lbl">Volgende sessie</div>
+            <div class="nm">${NEXT_SESSION.label}</div>
+          </div>
+          <div class="when">${NEXT_SESSION.start.split(' ')[1]}<small>${NEXT_SESSION.start.split(' ')[0]}</small></div>
+        </div>
+      </div>
+    </article>
+
+    <article class="block" data-material="holographic">
+      <div class="block-head">
+        <div class="block-label">// crew</div>
+        <button class="block-action" data-go="crew">${CREW.length} pax →</button>
+      </div>
+      <div class="block-body">
+        <div class="crew-pills">
+          ${CREW.map(p => `
+            <button class="crew-pill press" data-crew="${p.id}">
+              <span class="dot ${p.color}"></span>
+              ${p.name.split(' ')[0]}
+            </button>
+          `).join('')}
+        </div>
+      </div>
+    </article>
+
+    <article class="block" data-material="liquid-metal">
+      <div class="block-head">
+        <div class="block-label">// weer · mugello</div>
+      </div>
+      <div class="block-body">
+        <div class="wx-grid">
+          ${WEATHER.map(w => `
+            <div class="wx-cell">
+              <div class="wx-day">${w.day} ${w.date}</div>
+              <div class="wx-icon">${wxIcon(w.icon)}</div>
+              <div class="wx-temp">${w.tempH}°</div>
+              <div class="wx-rain">${w.rain}%</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    </article>
+
+    <article class="block" data-material="cracked-glass">
+      <div class="block-head">
+        <div class="block-label">// vluchten</div>
+        <button class="block-action" data-go="travel">→ travel</button>
+      </div>
+      <div class="block-body">
+        ${FLIGHTS.map(f => `
+          <div class="flight-row">
+            <div class="flight-line">
+              <div class="port">${f.from}</div>
+              <div class="mid">
+                <div class="row1">
+                  <div class="line"></div>
+                  ${ICON.plane}
+                  <div class="line"></div>
+                </div>
+                <div class="meta">${f.no} · ${f.plane}</div>
+              </div>
+              <div class="port" style="text-align:right">${f.to}</div>
+            </div>
+            <div class="flight-times">
+              <span class="dir">${f.dir==='out'?'HEEN':'TERUG'}</span>
+              <span></span>
+              <span>${f.day} · ${f.dep} → ${f.arr}</span>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </article>
+
+    <article class="block" data-material="scorched-paper">
+      <div class="block-head">
+        <div class="block-label">// hotel</div>
+      </div>
+      <div class="block-body">
+        <div class="hotel-name">${HOTEL.name}</div>
+        <div class="hotel-addr">${HOTEL.addr}</div>
+        <div class="hotel-actions">
+          <button class="btn-scorch press">${ICON.pin} Route</button>
+          <button class="btn-scorch press">${ICON.phone} Bel</button>
+        </div>
+      </div>
+    </article>
+
+    <article class="block" data-material="neon-circuit">
+      <div class="block-head">
+        <div class="block-label">// weekoverzicht</div>
+        <button class="block-action" data-go="schema">→ detail</button>
+      </div>
+      <div class="block-body">
+        ${WEEK.map(w => `
+          <div class="week-row">
+            <div class="week-day">${w.day}<small>${w.date} mei</small></div>
+            <div class="week-bar">
+              <span class="t">${w.start}</span>
+              <span class="track"></span>
+              <span class="t">${w.end}</span>
+            </div>
+            <div class="week-set">SET ${w.set}</div>
+          </div>
+        `).join('')}
+      </div>
+    </article>
+  `;
+}
+
+function renderSchema() {
+  const sub = `
+    <div class="sub-tabs">
+      <button class="${state.schedSub==='weekend'?'active':''}" data-sub="weekend">Weekend</button>
+      <button class="${state.schedSub==='draaiboek'?'active':''}" data-sub="draaiboek">Draaiboek</button>
+    </div>
+  `;
+  if (state.schedSub === 'draaiboek') {
+    const draai = [
+      { t:'13:30', l:'Studio open',         c:'rgba(0,0,0,0.4)' },
+      { t:'13:55', l:'Aftiteling open',     c:'var(--role-green)' },
+      { t:'14:00', l:'MotoGP Grand Prix',   c:'var(--role-red)' },
+      { t:'14:45', l:'Reclameblok',         c:'rgba(0,0,0,0.4)' },
+      { t:'14:55', l:'Podium · interviews', c:'var(--role-blue)' },
+      { t:'15:20', l:'Nabeschouwing',       c:'var(--role-purple)' },
+      { t:'15:45', l:'Afsluiting',          c:'var(--role-green)' },
+    ];
+    return sub + `
+      <div class="day-card open">
+        <div class="day-body" style="padding:10px 8px">
+          ${draai.map(r => `
+            <div class="session">
+              <div class="t">${r.t}</div>
+              <div class="mk" style="background:${r.c}"></div>
+              <div class="lbl">${r.l}</div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+  return sub + SCHEDULE.map((d, i) => `
+    <div class="day-card ${i === state.openDay ? 'open' : ''}">
+      <button class="day-head press" data-day-toggle="${i}">
+        <span class="d">Dag ${i+1}</span>
+        <span class="nm">${d.day}</span>
+        <span class="ct">${d.items.length}</span>
+        <span class="chev">${ICON.down}</span>
+      </button>
+      <div class="day-body">
+        ${d.items.map(it => `
+          <div class="session ${it.cls==='race'?'is-race':''}" data-cls="${it.cls}">
+            <div class="t">${it.time}</div>
+            <div class="mk"></div>
+            <div class="lbl">${it.label}</div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `).join('');
+}
+
+function renderCrew() {
+  return `
+    <article class="block" data-material="holographic" style="padding:14px 18px">
+      <div class="block-head">
+        <div class="block-label">// R${CURRENT.r} · ${CURRENT.country}</div>
+        <span class="block-action" style="pointer-events:none">${CREW.length} pax</span>
+      </div>
+    </article>
+    ${CREW.map(p => `
+      <div class="crew-row press" data-crew="${p.id}">
+        <div class="avatar ${p.color}">${p.ini}</div>
+        <div class="info">
+          <div class="nm">${p.name}</div>
+          <div class="ro"><span class="dot ${p.color}"></span> ${p.role}</div>
+        </div>
+        <span class="chev-r">${ICON.chev}</span>
+      </div>
+    `).join('')}
+  `;
+}
+
+function renderTravel() {
+  const tabs = `
+    <div class="sub-tabs">
+      ${['vlucht','auto','hotel','nood'].map(t => `
+        <button class="${state.travelSub===t?'active':''}" data-travel="${t}">${t}</button>
+      `).join('')}
+    </div>
+  `;
+  if (state.travelSub === 'vlucht') {
+    return tabs + FLIGHTS.map(f => `
+      <article class="block" data-material="cracked-glass">
+        <div class="block-head">
+          <div class="block-label">// ${f.dir==='out'?'heen':'terug'} · ${f.day}</div>
+        </div>
+        <div class="block-body">
+          <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+            <div>
+              <div style="font-family:'Fraunces',serif;font-weight:800;font-size:34px;letter-spacing:-0.02em;line-height:1;color:#f5f5fa">${f.from}</div>
+              <div style="font-family:'Space Mono',monospace;font-size:12px;color:rgba(255,255,255,0.6);margin-top:6px">${f.dep}</div>
+            </div>
+            <div style="flex:1;padding:0 4px;text-align:center">
+              <div style="display:flex;align-items:center;gap:6px;justify-content:center">
+                <div style="height:1px;flex:1;background:rgba(255,255,255,0.3)"></div>
+                <span style="color:rgba(255,255,255,0.7)">${ICON.plane}</span>
+                <div style="height:1px;flex:1;background:rgba(255,255,255,0.3)"></div>
+              </div>
+              <div style="font-family:'Space Mono',monospace;font-size:10px;color:rgba(255,255,255,0.5);margin-top:8px;letter-spacing:0.05em">${f.no} · ${f.plane}</div>
+            </div>
+            <div style="text-align:right">
+              <div style="font-family:'Fraunces',serif;font-weight:800;font-size:34px;letter-spacing:-0.02em;line-height:1;color:#f5f5fa">${f.to}</div>
+              <div style="font-family:'Space Mono',monospace;font-size:12px;color:rgba(255,255,255,0.6);margin-top:6px">${f.arr}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:14px;padding-top:12px;border-top:1px solid rgba(255,255,255,0.15);font-family:'Space Mono',monospace;font-size:11px;color:rgba(255,255,255,0.55);letter-spacing:0.05em">
+            <span>TERM ${f.term}</span>
+            <span style="flex:1"></span>
+            <span>${f.plane}</span>
+          </div>
+        </div>
+      </article>
+    `).join('');
+  }
+  if (state.travelSub === 'auto') {
+    return tabs + `
+      <article class="block" data-material="scorched-paper">
+        <div class="block-head">
+          <div class="block-label">// huurauto</div>
+        </div>
+        <div class="block-body">
+          <div class="hotel-name">${RENTAL.provider}</div>
+          <div class="hotel-addr">REF · ${RENTAL.ref}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:14px;padding-top:14px;border-top:1px dashed rgba(90,52,17,0.3)">
+            <div>
+              <div style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--scorch-3)">Ophalen</div>
+              <div style="font-family:'Fraunces',serif;font-weight:600;font-size:15px;margin-top:4px">${RENTAL.pickup}</div>
+            </div>
+            <div>
+              <div style="font-family:'Space Mono',monospace;font-size:10px;letter-spacing:0.18em;text-transform:uppercase;color:var(--scorch-3)">Inleveren</div>
+              <div style="font-family:'Fraunces',serif;font-weight:600;font-size:15px;margin-top:4px">${RENTAL.dropoff}</div>
+            </div>
+          </div>
+        </div>
+      </article>
+    `;
+  }
+  if (state.travelSub === 'hotel') {
+    return tabs + `
+      <article class="block" data-material="scorched-paper">
+        <div class="block-head">
+          <div class="block-label">// hotel</div>
+        </div>
+        <div class="block-body">
+          <div style="height:120px;border-radius:14px;background:linear-gradient(135deg, var(--scorch-2), var(--scorch-3));margin-bottom:14px;position:relative;overflow:hidden;border:1px solid rgba(90,52,17,0.4)">
+            <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg, transparent 0 14px, rgba(0,0,0,0.05) 14px 15px)"></div>
+            <div style="position:absolute;bottom:8px;left:10px;font-family:'Space Mono',monospace;font-size:10px;color:rgba(245,225,200,0.7);letter-spacing:0.1em">FOTO · HOTEL</div>
+          </div>
+          <div class="hotel-name">${HOTEL.name}</div>
+          <div class="hotel-addr">${HOTEL.addr}</div>
+          <div style="margin-top:10px;font-family:'Space Mono',monospace;font-size:10px;color:var(--scorch-3);letter-spacing:0.1em;text-transform:uppercase">↪ ${HOTEL.drive}</div>
+        </div>
+      </article>
+    `;
+  }
+  const emerg = [
+    { k:'112', l:'Algemeen alarm' },
+    { k:'118', l:'Medisch / ambulance' },
+    { k:'115', l:'Brandweer' },
+    { k:'113', l:'Politie' },
+  ];
+  return tabs + `
+    <article class="block" data-material="plain">
+      <div class="block-head">
+        <div class="block-label">// noodnummers · italië</div>
+      </div>
+      <div class="block-body">
+        ${emerg.map(e => `
+          <div class="emergency-row press">
+            <div class="emergency-num">${e.k}</div>
+            <div style="flex:1;font-family:'Fraunces',serif;font-size:15px;font-weight:500">${e.l}</div>
+            <span style="color:var(--role-red)">${ICON.phone}</span>
+          </div>
+        `).join('')}
+      </div>
+    </article>
+  `;
+}
+
+function renderCal() {
+  return `
+    <div class="cal-card">
+      ${SEASON.map(r => {
+        let badgeHTML = '';
+        if (r.current) badgeHTML = '<div class="badge now">NU</div>';
+        else if (r.done && r.winner) badgeHTML = `<div class="badge win">${r.winner.split(' ').slice(-1)[0]}</div>`;
+        else if (r.onsite) badgeHTML = '<div class="badge os">ONSITE</div>';
+        const cls = r.done ? 'done' : (r.current ? 'current' : '');
+        return `
+          <div class="cal-row ${cls}">
+            <div class="rno">R${r.r}</div>
+            <div class="flag">${r.code}</div>
+            <div class="info">
+              <div class="co">${r.country}</div>
+              <div class="meta">${r.circuit} · ${r.date}</div>
+            </div>
+            ${badgeHTML}
+          </div>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
+function openCrewModal(id) {
+  const p = CREW.find(x => x.id === id);
+  if (!p) return;
+  const mb = $('#modal');
+  mb.innerHTML = `
+    <div class="modal" onclick="event.stopPropagation()">
+      <div class="grabber"></div>
+      <div class="modal-head">
+        <div class="avatar ${p.color}" style="width:56px;height:56px;font-size:18px">${p.ini}</div>
+        <div>
+          <div class="nm">${p.name}</div>
+          <div class="ro"><span class="dot ${p.color}"></span> ${p.role}</div>
+        </div>
+      </div>
+      <div class="row press">
+        <div class="ic">${ICON.phone}</div>
+        <div style="flex:1"><div class="lbl">Bellen</div><div class="vl">${p.phone}</div></div>
+      </div>
+      <div class="row press">
+        <div class="ic">${ICON.mail}</div>
+        <div style="flex:1"><div class="lbl">E-mail</div><div class="vl">${p.email}</div></div>
+      </div>
+      <div class="row press">
+        <div class="ic">${ICON.whats}</div>
+        <div style="flex:1"><div class="lbl">WhatsApp</div><div class="vl">${p.phone}</div></div>
+      </div>
+    </div>
+  `;
+  mb.classList.add('show');
+}
+
+function render() {
+  let html = '';
+  if (state.tab === 'home')   html = renderHome();
+  if (state.tab === 'schema') html = renderSchema();
+  if (state.tab === 'crew')   html = renderCrew();
+  if (state.tab === 'travel') html = renderTravel();
+  if (state.tab === 'kal')    html = renderCal();
+  $('#content').innerHTML = html;
+  $$('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === state.tab));
+}
+
+document.addEventListener('click', (e) => {
+  const tab = e.target.closest('[data-tab]');
+  if (tab) { state.tab = tab.dataset.tab; render(); window.scrollTo({top:0}); return; }
+  const go = e.target.closest('[data-go]');
+  if (go) { state.tab = go.dataset.go; render(); window.scrollTo({top:0}); return; }
+  const crew = e.target.closest('[data-crew]');
+  if (crew) { openCrewModal(crew.dataset.crew); return; }
+  const sub = e.target.closest('[data-sub]');
+  if (sub) { state.schedSub = sub.dataset.sub; render(); return; }
+  const tv = e.target.closest('[data-travel]');
+  if (tv) { state.travelSub = tv.dataset.travel; render(); return; }
+  const dt = e.target.closest('[data-day-toggle]');
+  if (dt) {
+    const i = parseInt(dt.dataset.dayToggle, 10);
+    state.openDay = (state.openDay === i) ? -1 : i;
+    render(); return;
+  }
+  if (e.target.id === 'modal') $('#modal').classList.remove('show');
+});
+
+// Scroll-reactive: holographic blocks shift hue with scroll
+const scrollEl = document.documentElement;
+function onScroll() {
+  const p = scrollEl.scrollTop / (scrollEl.scrollHeight - window.innerHeight) || 0;
+  document.body.style.setProperty('--scroll', p.toFixed(3));
+  $$('[data-material="holographic"]').forEach(el => {
+    el.style.filter = `hue-rotate(${(p * 60).toFixed(1)}deg)`;
+  });
+}
+document.addEventListener('scroll', onScroll, { passive: true });
+
+function tickClock() {
+  const d = new Date();
+  $('#liveClock').textContent =
+    String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+}
+tickClock(); setInterval(tickClock, 30000);
+
+renderRaceRail();
+render();
+</script>
+</body>
+</html>
+
+<style id="__om-edit-overrides">
+#content >article:nth-child(1) { border-radius: 30px 44px 56px !important }
+#content >article:nth-child(1) { border-radius: 30px 3px 56px 44px !important }
+#content >article:nth-child(1) { border-radius: 30px 30px 30px 44px !important }
+#content >article:nth-child(1) { border-radius: 86px 52px 51px 49px !important }
+#content >article:nth-child(1) { border-radius: 132px 52px 51px 49px !important }
+#content >article:nth-child(1) { border-radius: 132px 52px 113px 49px !important }
+#content >article:nth-child(1) { border-radius: 132px 93px 113px 49px !important }
+#content >article:nth-child(1) { border-radius: 132px 93px 113px 65px !important }
+#content >article:nth-child(1) { border-radius: 132px 93px 113px 117px !important }
+#content >article:nth-child(1) { border-radius: 105px 93px 113px 117px !important }
+#content >article:nth-child(1) { border-radius: 69px 93px 113px 117px !important }
+#content >article:nth-child(1) { border-radius: 69px 93px 82px 117px !important }
+#content >article:nth-child(1) { border-radius: 69px 93px 56px 117px !important }
+</style>
